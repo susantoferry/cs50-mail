@@ -1,9 +1,14 @@
 {
-  "builds": [{
-    "src": "project3/wsgi.py",
-    "use": "@vercel/python",
-    "config": { "maxLambdaSize": "15mb", "runtime": "python3.11" }
-  }],
+  "builds": [
+    {
+      "src": "project3/wsgi.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "15mb",
+        "runtime": "python3.11"
+      }
+    }
+  ],
   "routes": [
     {
       "src": "/(.*)",
@@ -11,6 +16,6 @@
     }
   ],
   "hooks": {
-    "postdeploy": "python manage.py migrate"
+    "postdeploy": "pip install -r requirements.txt && python manage.py migrate"
   }
 }
