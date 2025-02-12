@@ -11,6 +11,6 @@
     }
   ],
   "hooks": {
-    "postdeploy": "python3 manage.py migrate"
+    "postdeploy": "python manage.py migrate"
   }
 }
