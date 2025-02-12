@@ -9,5 +9,8 @@
       "src": "/(.*)",
       "dest": "project3/wsgi.py"
     }
-  ]
+  ],
+  "hooks": {
+    "postdeploy": "python3 manage.py migrate"
+  }
 }
