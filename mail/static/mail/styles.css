@@ -1,0 +1,44 @@
+.btngroup {
+    margin: 10px 10px 0px 0px;
+}
+
+textarea {
+    min-height: 400px;
+}
+
+td.sender_to {
+    width: 20%;
+}
+
+td.body_subject {
+    width: 60%;
+}
+
+td.timestamp {
+    width: 20%;
+}
+
+#alert {
+    z-index: -1;
+    position: relative;
+}
+
+.mail {
+    white-space: pre-line;
+}
+
+.read {
+    background: #f1f3f4;
+}
+
+.table {
+    cursor: pointer;
+}
+
+.mt--35 {
+    margin-top: -35px;
+}
+
+.ml-20 {
+    margin-left: 20px; 
+}
