@@ -12,8 +12,14 @@ https://docs.djangoproject.com/en/3.0/ref/settings/
 
 import os
 
+from dotenv import load_dotenv
+
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Load local secrets (e.g. MONGODB_URI) from .env; on Vercel they come from
+# the project's environment variables instead.
+load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 
 # Quick-start development settings - unsuitable for production
@@ -32,9 +38,9 @@ ALLOWED_HOSTS = [".vercel.app", '.now.sh', '127.0.0.1', 'localhost']
 
 INSTALLED_APPS = [
     'mail',
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
+    'project3.apps.MongoAdminConfig',
+    'project3.apps.MongoAuthConfig',
+    'project3.apps.MongoContentTypesConfig',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
@@ -74,31 +80,24 @@ WSGI_APPLICATION = 'project3.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-#         # 'NAME': os.path.join('/tmp', 'db.sqlite3'),
-#     }
-# }
-
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'postgres',
-        'USER': 'postgres.lognphjlbynegmsgbrkb',
-        'PASSWORD': 'MacbookProM3Pro',
-        'HOST': 'aws-0-ap-southeast-2.pooler.supabase.com',  # Supabase host
-        'PORT': '5432',  # Use 5432 (Session Pooler) or 6543 (Transaction Pooler)
-        'OPTIONS': {
-            'sslmode': 'require',  # Ensure SSL is enabled
-            'gssencmode': 'disable',  # Disable GSSAPI encryption
-        },
+        'ENGINE': 'django_mongodb_backend',
+        'HOST': os.environ['MONGODB_URI'],
+        'NAME': os.environ.get('MONGODB_NAME', 'mail'),
     }
 }
 
+# Django's built-in apps ship SQL-style migrations; generate MongoDB-compatible
+# ones (ObjectId primary keys) into this package instead.
+MIGRATION_MODULES = {
+    'admin': 'mongo_migrations.admin',
+    'auth': 'mongo_migrations.auth',
+    'contenttypes': 'mongo_migrations.contenttypes',
+}
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+DEFAULT_AUTO_FIELD = 'django_mongodb_backend.fields.ObjectIdAutoField'
 
 AUTH_USER_MODEL = 'mail.User'
 
@@ -129,8 +128,6 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 
 USE_I18N = True
-
-USE_L10N = True
 
 USE_TZ = True
 

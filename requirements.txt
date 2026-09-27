@@ -1,4 +1,4 @@
-asgiref==3.7.2
+asgiref==3.12.1
 attrs==23.1.0
 autobahn==23.6.2
 Automat==22.10.0
@@ -12,7 +12,7 @@ cryptography==41.0.4
 daphne==4.0.0
 decorator==5.1.1
 distlib==0.3.8
-Django==4.2.6
+Django==5.2.17
 django-cors-headers==4.3.1
 django-extensions==3.2.3
 django-rest-knox==4.2.0
@@ -26,7 +26,6 @@ incremental==22.10.0
 markdown2==2.4.11
 Pillow==10.0.1
 platformdirs==4.2.0
-psycopg2-binary==2.9.10
 pyasn1==0.5.0
 pyasn1-modules==0.3.0
 pycparser==2.21
@@ -44,3 +43,7 @@ typing_extensions==4.8.0
 urllib3==2.0.6
 virtualenv==20.25.1
 zope.interface==6.1
+django-mongodb-backend==5.2.4
+pymongo==4.18.2
+dnspython==2.8.0
+python-dotenv==1.2.3

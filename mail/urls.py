@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 
 from . import views
 
@@ -10,6 +10,6 @@ urlpatterns = [
 
     # API Routes
     path("emails", views.compose, name="compose"),
-    path("emails/<int:email_id>", views.email, name="email"),
+    re_path(r"^emails/(?P<email_id>[0-9a-f]{24})$", views.email, name="email"),
     path("emails/<str:mailbox>", views.mailbox, name="mailbox"),
 ]
