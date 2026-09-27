@@ -29,7 +29,9 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = '05$4$3aew(8ywondz$g!k4m779pbvn9)euj0zp7-ae*x@4pxr+'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Off unless DEBUG=True is set (e.g. in your local .env). Never enable it on
+# Vercel: the debug error page exposes settings, including MONGODB_URI.
+DEBUG = os.environ.get('DEBUG') == 'True'
 
 ALLOWED_HOSTS = [".vercel.app", '.now.sh', '127.0.0.1', 'localhost']
 
