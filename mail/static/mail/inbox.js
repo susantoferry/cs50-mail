@@ -12,6 +12,8 @@ var ii = 0;
   });
 
   initEditor();
+  initAttachments();
+  initViewer();
 
   // By default, load the inbox
   load_mailbox('inbox');
@@ -146,6 +148,197 @@ function initEditor() {
   }
 }
 
+// Must match MAX_ATTACHMENTS_SIZE in views.py (Vercel rejects bodies over 4.5 MB)
+const MAX_ATTACHMENTS_SIZE = 4 * 1024 * 1024;
+const PAPERCLIP = '<svg viewBox="0 0 24 24"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>';
+
+// Files picked for the email being composed
+let composeFiles = [];
+
+// Thread the email being composed belongs to ('' starts a new conversation)
+let replyThreadId = '';
+
+function initAttachments() {
+  const input = document.querySelector('#compose-files');
+  const wrapper = document.querySelector('.rte-wrapper');
+
+  document.querySelector('#compose-attach').addEventListener('click', () => input.click());
+  input.addEventListener('change', () => {
+    addAttachments(input.files);
+    input.value = '';  // so picking the same file again still fires "change"
+  });
+
+  // Files can also be dragged onto the message box
+  wrapper.addEventListener('dragover', event => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    wrapper.classList.add('dragging');
+  });
+  wrapper.addEventListener('dragleave', () => wrapper.classList.remove('dragging'));
+  wrapper.addEventListener('drop', event => {
+    wrapper.classList.remove('dragging');
+    if (!event.dataTransfer.files.length) return;
+    event.preventDefault();
+    addAttachments(event.dataTransfer.files);
+  });
+}
+
+function addAttachments(files) {
+  files = [...files];
+  const total = [...composeFiles, ...files].reduce((sum, file) => sum + file.size, 0);
+  if (total > MAX_ATTACHMENTS_SIZE) {
+    bootbox.alert(`Attachments must be ${formatSize(MAX_ATTACHMENTS_SIZE)} or less in total.`);
+    return;
+  }
+  composeFiles.push(...files);
+  renderAttachments();
+}
+
+function clearAttachments() {
+  composeFiles = [];
+  renderAttachments();
+}
+
+function renderAttachments() {
+  const list = document.querySelector('#compose-attachments');
+  list.innerHTML = '';
+  composeFiles.forEach((file, index) => {
+    const chip = document.createElement('div');
+    chip.className = 'attachment-chip';
+    chip.innerHTML = `<span class="attachment-name">${escapeHtml(file.name)}</span>
+                      <span class="attachment-size">(${formatSize(file.size)})</span>
+                      <button type="button" class="attachment-remove" title="Remove attachment">&times;</button>`;
+    chip.querySelector('.attachment-remove').addEventListener('click', () => {
+      composeFiles.splice(index, 1);
+      renderAttachments();
+    });
+    list.appendChild(chip);
+  });
+}
+
+function attachmentLinks(attachments) {
+  if (!attachments.length) return '';
+  const links = attachments.map((attachment, index) => {
+    const title = `${attachment.previewable ? 'View' : 'Download'} ${escapeHtml(attachment.filename)}`;
+    const attrs = `href="/attachments/${attachment.id}" data-index="${index}" title="${title}" ${attachment.previewable ? '' : 'download'}`;
+
+    // Images get a thumbnail, like Gmail
+    if (attachment.previewable && attachment.content_type.startsWith('image/')) {
+      return `
+        <a class="attachment-link attachment-tile" ${attrs}>
+          <img src="/attachments/${attachment.id}?inline=1" alt="" loading="lazy">
+          <span class="attachment-tile-name">${PAPERCLIP}<span class="attachment-name">${escapeHtml(attachment.filename)}</span></span>
+        </a>`;
+    }
+    return `
+      <a class="attachment-link attachment-chip" ${attrs}>
+        ${PAPERCLIP}
+        <span class="attachment-name">${escapeHtml(attachment.filename)}</span>
+        <span class="attachment-size">(${formatSize(attachment.size)})</span>
+      </a>`;
+  }).join('');
+  const label = attachments.length === 1 ? 'One attachment' : `${attachments.length} attachments`;
+  return `<div class="email-attachments"><div class="attachment-label">${label}</div><div class="attachment-list">${links}</div></div>`;
+}
+
+// Previewable attachments open in the viewer; the rest download as before
+function bindAttachmentPreviews(container, attachments) {
+  const previewable = attachments.filter(attachment => attachment.previewable);
+  container.querySelectorAll('.email-attachments .attachment-link').forEach(link => {
+    const attachment = attachments[link.dataset.index];
+    if (!attachment.previewable) return;
+    link.addEventListener('click', event => {
+      event.preventDefault();
+      openViewer(previewable, previewable.indexOf(attachment));
+    });
+  });
+}
+
+const viewer = {items: [], index: 0};
+
+function initViewer() {
+  const el = document.querySelector('#viewer');
+  el.querySelector('.viewer-close').addEventListener('click', closeViewer);
+  el.querySelector('.viewer-prev').addEventListener('click', () => showViewerItem(viewer.index - 1));
+  el.querySelector('.viewer-next').addEventListener('click', () => showViewerItem(viewer.index + 1));
+
+  // Clicking the dark background (not the file itself) closes the viewer
+  el.querySelector('.viewer-stage').addEventListener('click', event => {
+    if (event.target.classList.contains('viewer-stage') || event.target.classList.contains('viewer-content')) {
+      closeViewer();
+    }
+  });
+
+  document.addEventListener('keydown', event => {
+    if (el.hidden) return;
+    if (event.key === 'Escape') closeViewer();
+    if (event.key === 'ArrowLeft') showViewerItem(viewer.index - 1);
+    if (event.key === 'ArrowRight') showViewerItem(viewer.index + 1);
+  });
+}
+
+function openViewer(items, index) {
+  viewer.items = items;
+  document.querySelector('#viewer').hidden = false;
+  document.body.classList.add('viewer-open');
+  showViewerItem(index);
+}
+
+function closeViewer() {
+  document.querySelector('#viewer').hidden = true;
+  document.body.classList.remove('viewer-open');
+  document.querySelector('#viewer .viewer-content').innerHTML = '';  // stops audio/video
+}
+
+function showViewerItem(index) {
+  if (index < 0 || index >= viewer.items.length) return;
+  viewer.index = index;
+
+  const el = document.querySelector('#viewer');
+  const attachment = viewer.items[index];
+  const url = `/attachments/${attachment.id}`;
+  const inlineUrl = `${url}?inline=1`;
+  const type = attachment.content_type;
+
+  el.querySelector('.viewer-name').textContent = attachment.filename;
+  el.querySelector('.viewer-count').textContent = viewer.items.length > 1 ? `${index + 1} of ${viewer.items.length}` : '';
+  el.querySelector('.viewer-download').href = url;
+  el.querySelector('.viewer-open').href = inlineUrl;
+  el.querySelector('.viewer-prev').hidden = index === 0;
+  el.querySelector('.viewer-next').hidden = index === viewer.items.length - 1;
+
+  const content = el.querySelector('.viewer-content');
+  content.innerHTML = '';
+  let media;
+  if (type.startsWith('image/')) {
+    media = document.createElement('img');
+    media.alt = attachment.filename;
+  } else if (type === 'application/pdf') {
+    media = document.createElement('iframe');
+    media.title = attachment.filename;
+  } else if (type.startsWith('video/') || type.startsWith('audio/')) {
+    media = document.createElement(type.startsWith('video/') ? 'video' : 'audio');
+    media.controls = true;
+    media.autoplay = true;
+  } else {
+    media = document.createElement('pre');
+    media.textContent = 'Loading…';
+    fetch(inlineUrl)
+      .then(response => response.text())
+      .then(text => { media.textContent = text; })
+      .catch(() => { media.textContent = 'Could not load this file.'; });
+  }
+  media.classList.add('viewer-media', `viewer-${media.tagName.toLowerCase()}`);
+  if (media.tagName !== 'PRE') media.src = inlineUrl;
+  content.appendChild(media);
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 // Turn a stored body (HTML from the editor, or legacy plain text) into safe HTML
 function renderBody(body) {
   if (/<[a-z][\s\S]*>/i.test(body)) {
@@ -163,7 +356,8 @@ function bodyToText(body) {
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
-  return div.innerHTML;
+  // Also escape quotes so the result is safe inside HTML attributes
+  return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function compose_email() {
@@ -176,6 +370,8 @@ function compose_email() {
   document.querySelector('#compose-recipients').value = '';
   document.querySelector('#compose-subject').value = '';
   document.querySelector('#compose-body').innerHTML = '';
+  clearAttachments();
+  replyThreadId = '';
 
   // Focusing compose-recipients form
   document.querySelector('#compose-recipients').focus();
@@ -194,155 +390,184 @@ function load_mailbox(mailbox) {
 
   // Show the mailbox name
   document.querySelector('#emails-view').innerHTML = `<h3>${mailbox.charAt(0).toUpperCase() + mailbox.slice(1)}</h3>`;
-  
-  //getEmails()
-  fetch(`/emails/${mailbox}`)
+
+  // One row per conversation, like Gmail
+  fetch(`/threads/${mailbox}`)
   .then(response => response.json())
-  .then(emails => {
-      mailLayout(emails, mailbox)
+  .then(threads => {
+      mailLayout(threads, mailbox)
   });
 }
 
-function mailLayout(emails, mailbox) {
-    var length = 50;
-    var table = document.createElement("table")
-    table.className = `table table-inbox table-hover`;
+function mailLayout(threads, mailbox) {
+  const length = 80;
+  const table = document.createElement("table");
+  table.className = `table table-inbox table-hover`;
+  const tblBody = document.createElement("tbody");
 
-    var tblBody = document.createElement("tbody");
+  for (const thread of threads) {
+    const row = document.createElement("tr");
+    row.className = thread.read ? 'read' : 'unread';
 
-    for (let email of emails) {
-      var row = document.createElement("tr");
+    // Sent shows who it went to; other mailboxes show who took part
+    const people = mailbox == 'sent' ? thread.recipients.map(email => `To: ${displayName(email)}`) : thread.senders.map(displayName);
+    const count = thread.count > 1 ? ` <span class="thread-count">${thread.count}</span>` : '';
 
-      if (mailbox == 'sent') {
-        send_rec = email.recipients
-      } else {
-        send_rec = email.sender
-      }
+    let snippet = bodyToText(splitQuote(renderBody(thread.body)).main).trim();
+    if (snippet.length > length) snippet = snippet.slice(0, length) + " ...";
 
-      // body email length
-      var body_text = bodyToText(email.body);
-      if (body_text.length > length) {
-        email_body = escapeHtml(body_text.slice(0, length)) + " ..."
-      } else {
-        email_body = escapeHtml(body_text)
-      }
-    
-    if (email.read == false) {
-      send_rec = send_rec.bold();
-      subject = email.subject.bold();
-    } else {
-      send_rec = send_rec;
-      subject = email.subject;
-      row.className = 'read';
-    }
-
-    // row table will change the color, if email has been read
-    row.innerHTML = `<td class="sender_to">${send_rec}</td>
-                     <td class="body_subject">${subject} - ${email_body}</td>
-                     <td class="timestamp">${email.timestamp}</td>`;      
+    row.innerHTML = `<td class="sender_to">${escapeHtml(people.join(', '))}${count}</td>
+                     <td class="body_subject"><span class="subject">${escapeHtml(thread.subject)}</span>
+                       <span class="snippet"> - ${escapeHtml(snippet)}</span></td>
+                     <td class="timestamp">${thread.has_attachments ? PAPERCLIP : ''}${thread.timestamp}</td>`;
 
     row.addEventListener('click', () => {
-      email_detail(email.id, mailbox);
+      open_thread(thread.thread_id, mailbox);
     });
-
     tblBody.appendChild(row);
-  };
+  }
 
   table.appendChild(tblBody);
-
-  document.querySelector("#emails-view").appendChild(table); 
+  document.querySelector("#emails-view").appendChild(table);
 }
 
-  function email_detail(id, mailbox) {
-    fetch(`/emails/${id}`)
-    .then(response => response.json())
-    .then(email => {
-      
-      document.querySelector("#emails-view").innerHTML = "";
-      var item = document.createElement("div");
-      item.className = `main-content-inner`;
-      item.innerHTML = `
-                        
-                        
-      <div class="row">
-        <div class="col-12 mt-5">
-          <div class="card">
-            <div class="card-body">
-              <div class="mail">
-                <div class="row" >
-                  <div class="col-md-6 mt--35 ml-20">
-                    <b>From: </b> ${email.sender}
-                    <b>To: </b> ${email.recipients}
-                    <b>Subject: </b> ${email.subject}
-                    <b>Timestamp: </b> ${email.timestamp}
-                  </div>
-                </div>
-                <hr>
-                <div class="emailbody mt--35 ml-20">
-                  ${renderBody(email.body)}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>`;
-                
-      document.querySelector("#emails-view").appendChild(item);
+function open_thread(threadId, mailbox) {
+  fetch(`/threads/${threadId}`)
+  .then(response => response.json())
+  .then(thread => {
+    const view = document.querySelector("#emails-view");
+    view.innerHTML = "";
 
-      if (mailbox == "sent") return;
+    const container = document.createElement("div");
+    container.className = 'thread';
+    container.innerHTML = `<h3 class="thread-subject">${escapeHtml(thread.subject)}</h3>`;
 
-      var button = document.createElement("div");
-      button.className = 'btn-grp-row'
+    // Older messages start collapsed; the latest and any unread ones start open
+    const messages = thread.emails;
+    messages.forEach((email, index) => {
+      const expanded = index === messages.length - 1 || !email.read;
+      container.appendChild(renderMessage(email, expanded));
+    });
+    view.appendChild(container);
 
-      const reply = document.createElement("button")
-      reply.className = 'btngroup btn btn-primary mb-3'
-      reply.innerHTML = 'Reply'
-      reply.addEventListener('click', () => {
-        sendReply(email)
-      })      
+    const actions = document.createElement("div");
+    actions.className = 'btn-grp-row';
 
-      let archive = document.createElement("button")
-      archive.className = 'btngroup btn btn-outline-info mb-3'
-      archive.innerHTML = 'Archive'
-      archive.addEventListener("click", () => {
-        isArchived(email.id, email.archived);
-      })
-      if (!email.archived) archive.textContent = "Archive";
-      else archive.textContent = "Unarchive";
-      
-      button.append(reply, archive);
+    const reply = document.createElement("button");
+    reply.className = 'btngroup btn btn-primary mb-3';
+    reply.textContent = 'Reply';
+    reply.addEventListener('click', () => sendReply(thread));
+    actions.append(reply);
 
-      document.querySelector("#emails-view").appendChild(button);
+    if (mailbox != "sent") {
+      const archived = messages.some(email => email.archived);
+      const archive = document.createElement("button");
+      archive.className = 'btngroup btn btn-outline-info mb-3';
+      archive.textContent = archived ? "Unarchive" : "Archive";
+      archive.addEventListener("click", () => archiveThread(threadId, archived));
+      actions.append(archive);
+    }
+    view.appendChild(actions);
 
-      
-      isRead(email.id);
+    if (messages.some(email => !email.read)) {
+      updateThread(threadId, {read: true});
+    }
+  });
+}
+
+// One message in a conversation: a clickable header, then body and attachments
+function renderMessage(email, expanded) {
+  const message = document.createElement("div");
+  message.className = 'message' + (expanded ? ' expanded' : '');
+
+  const {main, quote} = splitQuote(renderBody(email.body));
+  const snippet = bodyToText(main).trim();
+  const to = 'to ' + email.recipients.map(displayName).join(', ');
+
+  message.innerHTML = `
+    <div class="message-header" title="Click to expand or collapse">
+      <div class="avatar" style="background: ${avatarColor(email.sender)}">${escapeHtml(email.sender.charAt(0).toUpperCase())}</div>
+      <div class="message-meta">
+        <div class="message-from">${escapeHtml(email.sender)}</div>
+        <div class="message-to">${escapeHtml(to)}</div>
+        <div class="message-snippet">${escapeHtml(snippet)}</div>
+      </div>
+      <div class="message-time">${email.attachments.length ? PAPERCLIP : ''}${email.timestamp}</div>
+    </div>
+    <div class="message-body">
+      <div class="emailbody">${main}</div>
+      ${quote ? `<button type="button" class="quote-toggle" title="Show trimmed content">&bull;&bull;&bull;</button>
+                 <div class="message-quote" hidden>${quote}</div>` : ''}
+      ${attachmentLinks(email.attachments)}
+    </div>`;
+
+  message.querySelector('.message-header').addEventListener('click', () => {
+    message.classList.toggle('expanded');
+  });
+  const toggle = message.querySelector('.quote-toggle');
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      const trimmed = message.querySelector('.message-quote');
+      trimmed.hidden = !trimmed.hidden;
     });
   }
+  bindAttachmentPreviews(message, email.attachments);
+  return message;
+}
 
-  function isRead(id) {
-    fetch(`/emails/${id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        read: true,
-      }),
-    });
-  }
+// Separate a reply from the "On ... wrote:" history quoted below it, which the
+// conversation already shows as earlier messages
+function splitQuote(html) {
+  const root = document.createElement('div');
+  root.innerHTML = html;
+  const blockquote = [...root.children].find(el => el.matches('blockquote.rte-quote'));
+  if (!blockquote) return {main: html, quote: ''};
 
-  function isArchived(id, status) {
-    fetch(`/emails/${id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        archived: !status,
-      }),
-    }).then(() => {
-      if (status) {
-        showAlert('Email has moved to inbox.', 'alert-primary')  
-      } else {
-        showAlert('Email has moved to archive.', 'alert-info')
-      }
-      setTimeout(() => load_mailbox('inbox'), 200);
-    });
+  let start = blockquote;
+  const intro = blockquote.previousElementSibling;
+  if (intro && /^\s*On .* wrote:\s*$/.test(intro.textContent)) start = intro;
+
+  const quote = document.createElement('div');
+  while (start) {
+    const next = start.nextSibling;
+    quote.appendChild(start);
+    start = next;
   }
+  return {main: root.innerHTML, quote: quote.innerHTML};
+}
+
+function currentUser() {
+  return JSON.parse(document.querySelector('#user-email').textContent);
+}
+
+function displayName(email) {
+  return email === currentUser() ? 'me' : email;
+}
+
+function avatarColor(text) {
+  const colors = ['#1a73e8', '#d93025', '#188038', '#e37400', '#9334e6', '#c5221f', '#12b5cb', '#e52592', '#689f38', '#795548'];
+  let hash = 0;
+  for (const char of text) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return colors[hash % colors.length];
+}
+
+function updateThread(threadId, data) {
+  return fetch(`/threads/${threadId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+function archiveThread(threadId, archived) {
+  updateThread(threadId, {archived: !archived}).then(() => {
+    if (archived) {
+      showAlert('Conversation has moved to inbox.', 'alert-primary')
+    } else {
+      showAlert('Conversation has moved to archive.', 'alert-info')
+    }
+    setTimeout(() => load_mailbox('inbox'), 200);
+  });
+}
 
   function showAlert(message, alertType) {
     var alert = document.querySelector("#alert_placeholder");
@@ -363,29 +588,36 @@ function mailLayout(emails, mailbox) {
       return;
     }
 
-    if (!validateEmail(email)) {
-      bootbox.alert("The address \""+ email +"\" in the \<b>To</b>\ field was not recognized");
+    const invalid = email.split(',').map(address => address.trim()).find(address => !validateEmail(address));
+    if (invalid !== undefined) {
+      bootbox.alert(`The address "${escapeHtml(invalid)}" in the <b>To</b> field was not recognized`);
       return;
     }
 
+    const form = new FormData();
+    form.append('recipients', document.querySelector('#compose-recipients').value);
+    form.append('subject', document.querySelector('#compose-subject').value);
+    form.append('body', document.querySelector('#compose-body').innerHTML);
+    form.append('thread_id', replyThreadId);
+    composeFiles.forEach(file => form.append('attachments', file));
+
     fetch('/emails', {
       method: 'POST',
-      body: JSON.stringify({
-        recipients: document.querySelector('#compose-recipients').value,
-        subject: document.querySelector('#compose-subject').value,
-        body: document.querySelector('#compose-body').innerHTML
-      })
+      body: form
     })
     .then(response => response.json())
     .then(result => {
       console.log(result)
       if (result.status == 201) {
         showAlert('Your message has been successfully sent.', 'alert-success')
+        clearAttachments();
+        replyThreadId = '';
         load_mailbox("sent");
       } else {
-        showAlert('Failed to send message!.', 'alert-danger')
+        showAlert(result.error || 'Failed to send message!.', 'alert-danger')
       }
     })
+    .catch(() => showAlert('Failed to send message!.', 'alert-danger'))
   }
 
   function validateEmail(email) {
@@ -393,20 +625,20 @@ function mailLayout(emails, mailbox) {
     return reg.test(String(email).toLowerCase());
   }
 
-  function sendReply(email) {
+  function sendReply(thread) {
     // Show compose view and hide other views
     document.querySelector('#emails-view').style.display = 'none';
     document.querySelector('#compose-view').style.display = 'block';
     document.querySelector('.title-header').innerHTML = "Reply Email"
 
-    // Clear out composition fields
-    document.querySelector('#compose-recipients').value = `${email.sender}`;
-    if (email.subject.startsWith("Re:")){
-      document.querySelector('#compose-subject').value = email.subject;
-    }
-    else{
-      document.querySelector('#compose-subject').value = `Re: ${email.subject}`;
-    }
+    // Reply to whoever sent the latest message; if that was me, to the same people again
+    const email = thread.emails[thread.emails.length - 1];
+    const to = email.sender === currentUser() ? email.recipients.join(', ') : email.sender;
+    document.querySelector('#compose-recipients').value = to;
+    document.querySelector('#compose-subject').value = `Re: ${thread.subject}`;
+
+    clearAttachments();
+    replyThreadId = thread.thread_id;
 
     const body = document.querySelector('#compose-body');
     body.innerHTML = `<div><br></div><div><br></div>

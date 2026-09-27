@@ -12,4 +12,7 @@ urlpatterns = [
     path("emails", views.compose, name="compose"),
     re_path(r"^emails/(?P<email_id>[0-9a-f]{24})$", views.email, name="email"),
     path("emails/<str:mailbox>", views.mailbox, name="mailbox"),
+    re_path(r"^threads/(?P<thread_id>[0-9a-f]{32})$", views.thread, name="thread"),
+    path("threads/<str:mailbox>", views.threads, name="threads"),
+    re_path(r"^attachments/(?P<attachment_id>[0-9a-f]{24})$", views.attachment, name="attachment"),
 ]
