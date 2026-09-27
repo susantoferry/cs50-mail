@@ -1,12 +1,10 @@
 #!/bin/bash
+set -e
 
-# Ensure Python and pip are available
-export PATH="/vercel/.python/bin:$PATH"
-
-# Upgrade pip and install dependencies
-python3 -m ensurepip --default-pip
-python3 -m pip install --upgrade pip
-python3 -m pip install -r requirements.txt
+# Vercel's Python is externally managed (PEP 668), so install into a
+# throwaway virtual environment instead of the system Python.
+python3 -m venv /tmp/build-venv
+/tmp/build-venv/bin/pip install -r requirements.txt
 
 # Collect static files
-python3 manage.py collectstatic --noinput
+/tmp/build-venv/bin/python manage.py collectstatic --noinput
