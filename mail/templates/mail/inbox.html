@@ -37,13 +37,117 @@
             <div class="form-group">
                 <input class="form-control" id="compose-subject" placeholder="Subject">
             </div>
-            <textarea class="form-control" id="compose-body" placeholder="Body"></textarea>
-            <input type="submit" id="compose-send" class="btngroup btn btn-primary"/>
+            <div class="form-control rte-editor" id="compose-body" contenteditable="true" data-placeholder="Body"></div>
+
+            <div class="rte-toolbar" id="rte-toolbar">
+                <button type="button" class="rte-btn" data-cmd="undo" title="Undo (Ctrl+Z)">
+                    <svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+                </button>
+                <button type="button" class="rte-btn" data-cmd="redo" title="Redo (Ctrl+Y)">
+                    <svg viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>
+                </button>
+                <span class="rte-sep"></span>
+
+                <div class="rte-dropdown">
+                    <button type="button" class="rte-btn rte-toggle rte-font-label" title="Font">Sans Serif <span class="rte-caret"></span></button>
+                    <div class="rte-menu">
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="Arial, Helvetica, sans-serif" style="font-family: Arial, sans-serif">Sans Serif</button>
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="'Times New Roman', Times, serif" style="font-family: 'Times New Roman', serif">Serif</button>
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="'Courier New', Courier, monospace" style="font-family: 'Courier New', monospace">Fixed Width</button>
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="'Arial Black', sans-serif" style="font-family: 'Arial Black', sans-serif">Wide</button>
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="'Arial Narrow', sans-serif" style="font-family: 'Arial Narrow', sans-serif">Narrow</button>
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="'Comic Sans MS', cursive" style="font-family: 'Comic Sans MS', cursive">Comic Sans MS</button>
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="Garamond, serif" style="font-family: Garamond, serif">Garamond</button>
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="Georgia, serif" style="font-family: Georgia, serif">Georgia</button>
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="Tahoma, sans-serif" style="font-family: Tahoma, sans-serif">Tahoma</button>
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="'Trebuchet MS', sans-serif" style="font-family: 'Trebuchet MS', sans-serif">Trebuchet MS</button>
+                        <button type="button" class="rte-item" data-cmd="fontName" data-value="Verdana, sans-serif" style="font-family: Verdana, sans-serif">Verdana</button>
+                    </div>
+                </div>
+                <span class="rte-sep"></span>
+
+                <div class="rte-dropdown">
+                    <button type="button" class="rte-btn rte-toggle" title="Size"><b>T</b><small><b>T</b></small> <span class="rte-caret"></span></button>
+                    <div class="rte-menu">
+                        <button type="button" class="rte-item" data-cmd="fontSize" data-value="2" style="font-size: 12px">Small</button>
+                        <button type="button" class="rte-item" data-cmd="fontSize" data-value="3" style="font-size: 16px">Normal</button>
+                        <button type="button" class="rte-item" data-cmd="fontSize" data-value="5" style="font-size: 22px">Large</button>
+                        <button type="button" class="rte-item" data-cmd="fontSize" data-value="7" style="font-size: 30px">Huge</button>
+                    </div>
+                </div>
+                <span class="rte-sep"></span>
+
+                <button type="button" class="rte-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+                <button type="button" class="rte-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i style="font-family: serif; font-size: 18px">I</i></button>
+                <button type="button" class="rte-btn" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+
+                <div class="rte-dropdown">
+                    <button type="button" class="rte-btn rte-toggle" title="Formatting colours">
+                        <span class="rte-color-a">A</span> <span class="rte-caret"></span>
+                    </button>
+                    <div class="rte-menu rte-color-menu">
+                        <div class="rte-palette-col">
+                            <div class="rte-palette-title">Background colour</div>
+                            <div class="rte-palette" data-cmd="hiliteColor"></div>
+                        </div>
+                        <div class="rte-palette-col">
+                            <div class="rte-palette-title">Text colour</div>
+                            <div class="rte-palette" data-cmd="foreColor"></div>
+                        </div>
+                    </div>
+                </div>
+                <span class="rte-sep"></span>
+
+                <div class="rte-dropdown">
+                    <button type="button" class="rte-btn rte-toggle" title="Align">
+                        <svg viewBox="0 0 24 24"><path d="M15 15H3v2h12v-2zm0-8H3v2h12V7zM3 13h18v-2H3v2zm0 8h18v-2H3v2zM3 3v2h18V3H3z"/></svg>
+                        <span class="rte-caret"></span>
+                    </button>
+                    <div class="rte-menu rte-menu-row">
+                        <button type="button" class="rte-btn" data-cmd="justifyLeft" title="Align left">
+                            <svg viewBox="0 0 24 24"><path d="M15 15H3v2h12v-2zm0-8H3v2h12V7zM3 13h18v-2H3v2zm0 8h18v-2H3v2zM3 3v2h18V3H3z"/></svg>
+                        </button>
+                        <button type="button" class="rte-btn" data-cmd="justifyCenter" title="Align centre">
+                            <svg viewBox="0 0 24 24"><path d="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z"/></svg>
+                        </button>
+                        <button type="button" class="rte-btn" data-cmd="justifyRight" title="Align right">
+                            <svg viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18v-2H3v2zm6-4h12V7H9v2zM3 3v2h18V3H3z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="rte-btn" data-cmd="insertOrderedList" title="Numbered list">
+                    <svg viewBox="0 0 24 24"><path d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"/></svg>
+                </button>
+                <button type="button" class="rte-btn" data-cmd="insertUnorderedList" title="Bulleted list">
+                    <svg viewBox="0 0 24 24"><path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/></svg>
+                </button>
+                <button type="button" class="rte-btn" data-cmd="outdent" title="Indent less">
+                    <svg viewBox="0 0 24 24"><path d="M11 17h10v-2H11v2zm-8-5l4 4V8l-4 4zm0 9h18v-2H3v2zM3 3v2h18V3H3zm8 6h10V7H11v2zm0 4h10v-2H11v2z"/></svg>
+                </button>
+                <button type="button" class="rte-btn" data-cmd="indent" title="Indent more">
+                    <svg viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zM3 8v8l4-4-4-4zm8 9h10v-2H11v2zM3 3v2h18V3H3zm8 6h10V7H11v2zm0 4h10v-2H11v2z"/></svg>
+                </button>
+                <span class="rte-sep"></span>
+
+                <div class="rte-dropdown">
+                    <button type="button" class="rte-btn rte-toggle" title="More formatting options"><span class="rte-caret"></span></button>
+                    <div class="rte-menu rte-menu-row rte-menu-right">
+                        <button type="button" class="rte-btn" data-cmd="formatBlock" data-value="blockquote" title="Quote">
+                            <svg viewBox="0 0 24 24"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg>
+                        </button>
+                        <button type="button" class="rte-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+                        <button type="button" class="rte-btn" data-cmd="removeFormat" title="Remove formatting">T<sub>x</sub></button>
+                    </div>
+                </div>
+            </div>
+
+            <input type="submit" id="compose-send" class="btngroup btn btn-primary" value="Send"/>
         </form>
     </div>
 
 {% endblock %}
 
 {% block script %}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
     <script src="{% static 'mail/inbox.js' %}"></script>
 {% endblock %}

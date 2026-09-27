@@ -11,9 +11,160 @@ var ii = 0;
     
   });
 
+  initEditor();
+
   // By default, load the inbox
   load_mailbox('inbox');
 });
+
+const PALETTE = [
+  ['#000000', '#444444', '#666666', '#999999', '#cccccc', '#eeeeee', '#f3f3f3', '#ffffff'],
+  ['#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#9900ff', '#ff00ff'],
+  ['#f4cccc', '#fce5cd', '#fff2cc', '#d9ead3', '#d0e0e3', '#cfe2f3', '#d9d2e9', '#ead1dc'],
+  ['#ea9999', '#f9cb9c', '#ffe599', '#b6d7a8', '#a2c4c9', '#9fc5e8', '#b4a7d6', '#d5a6bd'],
+  ['#e06666', '#f6b26b', '#ffd966', '#93c47d', '#76a5af', '#6fa8dc', '#8e7cc3', '#c27ba0'],
+  ['#cc0000', '#e69138', '#f1c232', '#6aa84f', '#45818e', '#3d85c6', '#674ea7', '#a64d79'],
+  ['#990000', '#b45f06', '#bf9000', '#38761d', '#134f5c', '#0b5394', '#351c75', '#741b47'],
+  ['#660000', '#783f04', '#7f6000', '#274e13', '#0c343d', '#073763', '#20124d', '#4c1130'],
+];
+
+// Rich-text editor for the email body (compose and reply)
+function initEditor() {
+  const editor = document.querySelector('#compose-body');
+  const toolbar = document.querySelector('#rte-toolbar');
+  let savedRange = null;
+
+  document.execCommand('defaultParagraphSeparator', false, 'div');
+
+  // Build the background / text colour palettes
+  toolbar.querySelectorAll('.rte-palette').forEach(palette => {
+    PALETTE.forEach((row, i) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'rte-palette-row' + (i === 2 ? ' rte-palette-gap' : '');
+      row.forEach(color => {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.className = 'rte-swatch';
+        swatch.style.background = color;
+        swatch.title = color;
+        swatch.dataset.cmd = palette.dataset.cmd;
+        swatch.dataset.value = color;
+        rowEl.appendChild(swatch);
+      });
+      palette.appendChild(rowEl);
+    });
+  });
+
+  // Remember the selection inside the editor so toolbar actions apply to it
+  document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection();
+    if (sel.rangeCount && editor.contains(sel.anchorNode)) {
+      savedRange = sel.getRangeAt(0).cloneRange();
+      updateToolbarState();
+    }
+  });
+
+  function restoreSelection() {
+    editor.focus();
+    if (savedRange) {
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(savedRange);
+    }
+  }
+
+  function closeMenus(except) {
+    toolbar.querySelectorAll('.rte-dropdown.open').forEach(d => {
+      if (d !== except) d.classList.remove('open');
+    });
+  }
+
+  // Keep focus in the editor when clicking toolbar controls
+  toolbar.addEventListener('mousedown', event => event.preventDefault());
+
+  toolbar.addEventListener('click', event => {
+    const toggle = event.target.closest('.rte-toggle');
+    if (toggle) {
+      const dropdown = toggle.parentElement;
+      closeMenus(dropdown);
+      dropdown.classList.toggle('open');
+      if (dropdown.querySelector('.rte-color-menu')) markCurrentColors();
+      return;
+    }
+
+    const control = event.target.closest('[data-cmd]');
+    if (!control) return;
+
+    restoreSelection();
+    const cmd = control.dataset.cmd;
+    const value = control.dataset.value || null;
+    document.execCommand('styleWithCSS', false, cmd === 'foreColor' || cmd === 'hiliteColor' || cmd === 'fontSize');
+    document.execCommand(cmd, false, value);
+
+    if (cmd === 'fontName') {
+      toolbar.querySelector('.rte-font-label').firstChild.textContent = control.textContent + ' ';
+    }
+    if (cmd === 'foreColor') {
+      toolbar.querySelector('.rte-color-a').style.borderBottomColor = value;
+    }
+    closeMenus();
+    updateToolbarState();
+  });
+
+  document.addEventListener('click', event => {
+    if (!toolbar.contains(event.target)) closeMenus();
+  });
+
+  function updateToolbarState() {
+    ['bold', 'italic', 'underline', 'strikeThrough', 'insertOrderedList', 'insertUnorderedList'].forEach(cmd => {
+      const btn = toolbar.querySelector(`.rte-btn[data-cmd="${cmd}"]`);
+      if (btn) btn.classList.toggle('active', document.queryCommandState(cmd));
+    });
+  }
+
+  // Tick the swatches that match the colours at the current selection
+  function markCurrentColors() {
+    const current = {
+      foreColor: normalizeColor(document.queryCommandValue('foreColor')),
+      hiliteColor: normalizeColor(document.queryCommandValue('backColor')),
+    };
+    toolbar.querySelectorAll('.rte-swatch').forEach(swatch => {
+      const selected = normalizeColor(swatch.dataset.value) === current[swatch.dataset.cmd];
+      swatch.classList.toggle('selected', selected);
+    });
+  }
+
+  function normalizeColor(color) {
+    if (!color) return '';
+    const probe = document.createElement('span');
+    probe.style.color = color;
+    document.body.appendChild(probe);
+    const rgb = getComputedStyle(probe).color;
+    probe.remove();
+    // Transparent background means "no highlight", i.e. white in the palette
+    return rgb === 'rgba(0, 0, 0, 0)' ? 'rgb(255, 255, 255)' : rgb;
+  }
+}
+
+// Turn a stored body (HTML from the editor, or legacy plain text) into safe HTML
+function renderBody(body) {
+  if (/<[a-z][\s\S]*>/i.test(body)) {
+    return DOMPurify.sanitize(body);
+  }
+  return escapeHtml(body).replace(/\n/g, '<br>');
+}
+
+function bodyToText(body) {
+  const div = document.createElement('div');
+  div.innerHTML = renderBody(body);
+  return div.textContent;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 function compose_email() {
   // Show compose view and hide other views
@@ -24,7 +175,7 @@ function compose_email() {
   document.querySelector('.title-header').innerHTML = "New Email"
   document.querySelector('#compose-recipients').value = '';
   document.querySelector('#compose-subject').value = '';
-  document.querySelector('#compose-body').value = '';
+  document.querySelector('#compose-body').innerHTML = '';
 
   // Focusing compose-recipients form
   document.querySelector('#compose-recipients').focus();
@@ -69,10 +220,11 @@ function mailLayout(emails, mailbox) {
       }
 
       // body email length
-      if (email.body.length > length) {
-        email_body = email.body.slice(0, length) + " ..."
+      var body_text = bodyToText(email.body);
+      if (body_text.length > length) {
+        email_body = escapeHtml(body_text.slice(0, length)) + " ..."
       } else {
-        email_body = email.body
+        email_body = escapeHtml(body_text)
       }
     
     if (email.read == false) {
@@ -127,7 +279,7 @@ function mailLayout(emails, mailbox) {
                 </div>
                 <hr>
                 <div class="emailbody mt--35 ml-20">
-                  ${email.body}
+                  ${renderBody(email.body)}
                 </div>
               </div>
             </div>
@@ -221,7 +373,7 @@ function mailLayout(emails, mailbox) {
       body: JSON.stringify({
         recipients: document.querySelector('#compose-recipients').value,
         subject: document.querySelector('#compose-subject').value,
-        body: document.querySelector('#compose-body').value
+        body: document.querySelector('#compose-body').innerHTML
       })
     })
     .then(response => response.json())
@@ -256,14 +408,17 @@ function mailLayout(emails, mailbox) {
       document.querySelector('#compose-subject').value = `Re: ${email.subject}`;
     }
 
-    document.querySelector('#compose-body').value = `\n\n ----- On ${email.timestamp}: <${email.sender}> wrote: \n\n${email.body}`;
-    document.querySelector('#compose-body').focus();
-    document.querySelector('#compose-body').setSelectionRange(0, 0); 
+    const body = document.querySelector('#compose-body');
+    body.innerHTML = `<div><br></div><div><br></div>
+      <div>On ${email.timestamp}, &lt;${escapeHtml(email.sender)}&gt; wrote:</div>
+      <blockquote class="rte-quote">${renderBody(email.body)}</blockquote>`;
 
-    // Add event listener to send email button
-    document.querySelector('#compose-send').addEventListener('click', (response) => {
-      bootbox.hideAll();
-        sendEmail();
-        response.preventDefault();
-    })
+    // Put the cursor at the top, above the quoted message
+    body.focus();
+    const range = document.createRange();
+    range.setStart(body.firstChild, 0);
+    range.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
   }
